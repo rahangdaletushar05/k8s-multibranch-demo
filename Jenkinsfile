@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     environment {
-        REGISTRY = "docker.io/tusharrahangdale"
-        IMAGE_NAME = "demo-app"
+        REGISTRY = "docker.io"
+        IMAGE_NAME = "tusharrahangdale/demo-app"
     }
 
     stages {
@@ -17,34 +17,31 @@ pipeline {
 
         stage('Docker Login') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds',
-                    usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-
+                withCredentials([string(credentialsId: 'docker-pass', variable: 'DOCKER_PASS')]) {
                     sh """
-                    echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                        echo $DOCKER_PASS | docker login -u tussrrahangdale --password-stdin
                     """
                 }
             }
         }
 
-        stage('Build & Push Docker Image') {
+        stage("Build & Push Docker Image") {
             steps {
                 sh """
-                docker build -t $REGISTRY/$IMAGE_NAME:${env.BRANCH_NAME} .
-                docker push $REGISTRY/$IMAGE_NAME:${env.BRANCH_NAME}
+                docker build -t ${REGISTRY}/${IMAGE_NAME}:${env.BRANCH_NAME} .
+                docker push ${REGISTRY}/${IMAGE_NAME}:${env.BRANCH_NAME}
                 """
             }
         }
 
-        stage('Deploy to Kubernetes') {
+        stage("Deploy to Kubernetes") {
             steps {
                 withCredentials([file(credentialsId: 'kubeconfig-creds', variable: 'KUBE_CONFIG')]) {
-
                     sh """
                     mkdir -p ~/.kube
                     cp \$KUBE_CONFIG ~/.kube/config
 
-                    sed -i s|IMAGE|$REGISTRY/$IMAGE_NAME:${env.BRANCH_NAME}|g k8s/deployment.yaml
+                    sed -i s|IMAGE|${REGISTRY}/${IMAGE_NAME}:${env.BRANCH_NAME}|g k8s/deployment.yaml
 
                     kubectl apply -f k8s/deployment.yaml -n dev --validate=false
                     kubectl rollout status deployment/demo-app -n dev --timeout=60s
