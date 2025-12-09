@@ -2,18 +2,18 @@ pipeline {
     agent any
 
     environment {
-        REGISTRY = "docker.io/tusharrahangdale"          // Your DockerHub Username
-        IMAGE_NAME = "k8s-demo-app"
-        DOCKER_CREDS = credentials('dockerhub-creds')    // Add in Jenkins Credentials
-        KUBE_CONFIG = credentials('kubeconfig-creds')    // Upload kubeconfig in Jenkins
+        REGISTRY = "docker.io/tusharrahangdale"           // your DockerHub user
+        IMAGE_NAME = "demo-app"                           // keep lowercase
+        DOCKER_CREDS = credentials('dockerhub-creds')
+        KUBE_CONFIG  = credentials('kubeconfig-creds')
     }
 
     stages {
 
-        stage("Git Clone") {
+        stage("Checkout") {
             steps {
                 checkout scm
-                echo "Building from branch → ${env.BRANCH_NAME}"
+                echo "Branch Running → ${env.BRANCH_NAME}"
             }
         }
 
@@ -25,7 +25,7 @@ pipeline {
             }
         }
 
-        stage("Docker Build + Push") {
+        stage("Build & Push Docker Image") {
             steps {
                 sh """
                 docker build -t $REGISTRY/$IMAGE_NAME:${env.BRANCH_NAME} .
@@ -37,27 +37,16 @@ pipeline {
         stage("Deploy to Kubernetes") {
             steps {
                 script {
-                    // Store kubeconfig for kubectl access
-                    sh """
-                    mkdir -p ~/.kube
-                    echo '${KUBE_CONFIG}' > ~/.kube/config
-                    """
+                    sh "mkdir -p ~/.kube"
+                    writeFile file: "~/.kube/config", text: KUBE_CONFIG
 
-                    // Deploy with new image per branch
                     sh """
                     sed -i 's|IMAGE|$REGISTRY/$IMAGE_NAME:${env.BRANCH_NAME}|g' k8s/deployment.yaml
-                    kubectl apply -f k8s/deployment.yaml
-                    kubectl apply -f k8s/service.yaml
+                    kubectl apply -f k8s/deployment.yaml -n dev
+                    kubectl apply -f k8s/service.yaml -n dev
+                    kubectl rollout status deployment/k8s-app -n dev
                     """
                 }
-            }
-        }
-
-        stage("Rollout Status Check") {
-            steps {
-                sh """
-                kubectl rollout status deployment/k8s-app --timeout=60s
-                """
             }
         }
     }
