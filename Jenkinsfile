@@ -2,30 +2,30 @@ pipeline {
     agent any
 
     environment {
-        REGISTRY = "docker.io/tusharrahangdale"           // your DockerHub user
-        IMAGE_NAME = "demo-app"                           // keep lowercase
-        DOCKER_CREDS = credentials('dockerhub-creds')
-        KUBE_CONFIG  = credentials('kubeconfig-creds')
+        REGISTRY = "docker.io/tusharrahangdale"
+        IMAGE_NAME = "demo-app"
     }
 
     stages {
 
-        stage("Checkout") {
+        stage('Checkout') {
             steps {
-                checkout scm
                 echo "Branch Running → ${env.BRANCH_NAME}"
+                checkout scm
             }
         }
 
-        stage("Docker Login") {
+        stage('Docker Login') {
             steps {
-                sh """
-                echo $DOCKER_CREDS_PSW | docker login -u $DOCKER_CREDS_USR --password-stdin
-                """
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh """
+                    echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                    """
+                }
             }
         }
 
-        stage("Build & Push Docker Image") {
+        stage('Build & Push Docker Image') {
             steps {
                 sh """
                 docker build -t $REGISTRY/$IMAGE_NAME:${env.BRANCH_NAME} .
@@ -34,17 +34,18 @@ pipeline {
             }
         }
 
-        stage("Deploy to Kubernetes") {
+        stage('Deploy to Kubernetes') {
             steps {
-                script {
-                    sh "mkdir -p ~/.kube"
-                    writeFile file: "~/.kube/config", text: KUBE_CONFIG
-
+                withCredentials([file(credentialsId: 'kubeconfig-creds', variable: 'KUBE_CONFIG')]) {
                     sh """
-                    sed -i 's|IMAGE|$REGISTRY/$IMAGE_NAME:${env.BRANCH_NAME}|g' k8s/deployment.yaml
-                    kubectl apply -f k8s/deployment.yaml -n dev
-                    kubectl apply -f k8s/service.yaml -n dev
-                    kubectl rollout status deployment/k8s-app -n dev
+                    mkdir -p ~/.kube
+                    cp $KUBE_CONFIG ~/.kube/config
+
+                    # Replace image dynamically
+                    sed -i s|IMAGE|$REGISTRY/$IMAGE_NAME:${env.BRANCH_NAME}|g k8s/deployment.yaml
+
+                    kubectl apply -f k8s/deployment.yaml -n dev --validate=false
+                    kubectl rollout status deployment/demo-app -n dev
                     """
                 }
             }
