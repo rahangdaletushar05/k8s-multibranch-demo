@@ -36,12 +36,12 @@ pipeline {
         stage("Deploy to Kubernetes") {
             steps {
                 withCredentials([file(credentialsId: 'kube-config', variable: 'KUBE_CONFIG')]) {
-
                     sh """
                     mkdir -p \$WORKSPACE/.kube
                     cp \$KUBE_CONFIG \$WORKSPACE/.kube/config
 
-                    sed -i s|IMAGE|docker.io/${DOCKER_USER}/demo-app:${env.BRANCH_NAME}|g k8s/deployment.yaml
+                    sed -i "s|IMAGE|docker.io/${DOCKER_USER}/demo-app:${env.BRANCH_NAME}|g" k8s/deployment.yaml
+
                     kubectl --kubeconfig=\$WORKSPACE/.kube/config apply -f k8s/deployment.yaml -n dev
                     kubectl --kubeconfig=\$WORKSPACE/.kube/config get pods -n dev
                     """
