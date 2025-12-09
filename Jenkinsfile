@@ -2,24 +2,24 @@ pipeline {
     agent any
 
     environment {
-        REGISTRY = "docker.io"
-        IMAGE_NAME = "tusharrahangdale/demo-app"
+        DOCKER_USER = "tusharrahangdale"
+        IMAGE_NAME = "demo-app"
     }
 
     stages {
 
-        stage('Checkout') {
+        stage("Checkout") {
             steps {
-                echo "Branch Running → ${env.BRANCH_NAME}"
+                echo "Branch Running → ${env.GIT_BRANCH}"
                 checkout scm
             }
         }
 
-        stage('Docker Login') {
+        stage("Docker Login") {
             steps {
                 withCredentials([string(credentialsId: 'docker-pass', variable: 'DOCKER_PASS')]) {
                     sh """
-                        echo $DOCKER_PASS | docker login -u tussrrahangdale --password-stdin
+                        echo $DOCKER_PASS | docker login -u ${DOCKER_USER} --password-stdin
                     """
                 }
             }
@@ -28,23 +28,22 @@ pipeline {
         stage("Build & Push Docker Image") {
             steps {
                 sh """
-                docker build -t ${REGISTRY}/${IMAGE_NAME}:${env.BRANCH_NAME} .
-                docker push ${REGISTRY}/${IMAGE_NAME}:${env.BRANCH_NAME}
+                    docker build -t docker.io/${DOCKER_USER}/${IMAGE_NAME}:dev .
+                    docker push docker.io/${DOCKER_USER}/${IMAGE_NAME}:dev
                 """
             }
         }
 
         stage("Deploy to Kubernetes") {
             steps {
-                withCredentials([file(credentialsId: 'kubeconfig-creds', variable: 'KUBE_CONFIG')]) {
+                withCredentials([file(credentialsId: 'kube-config', variable: 'KUBE_CONFIG')]) {
                     sh """
-                    mkdir -p ~/.kube
-                    cp \$KUBE_CONFIG ~/.kube/config
+                        mkdir -p /tmp/.kube
+                        cp \$KUBE_CONFIG /tmp/.kube/config
 
-                    sed -i s|IMAGE|${REGISTRY}/${IMAGE_NAME}:${env.BRANCH_NAME}|g k8s/deployment.yaml
+                        sed -i 's|IMAGE|docker.io/${DOCKER_USER}/${IMAGE_NAME}:dev|g' k8s/deployment.yaml
 
-                    kubectl apply -f k8s/deployment.yaml -n dev --validate=false
-                    kubectl rollout status deployment/demo-app -n dev --timeout=60s
+                        kubectl --kubeconfig=/tmp/.kube/config apply -f k8s/deployment.yaml -n dev
                     """
                 }
             }
