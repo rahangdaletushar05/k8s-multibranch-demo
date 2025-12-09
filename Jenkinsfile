@@ -2,19 +2,30 @@ pipeline {
     agent any
 
     environment {
-        REGISTRY = "docker.io/YOUR_DOCKERHUB_USER"    // change this
-        IMAGE_NAME = "demo-app"
-        KUBE_CONFIG = credentials('kubeconfig-creds')
+        REGISTRY = "docker.io/tusharrahangdale"           // your DockerHub user
+        IMAGE_NAME = "demo-app"                           // keep lowercase
+        DOCKER_CREDS = credentials('dockerhub-creds')
+        KUBE_CONFIG  = credentials('kubeconfig-creds')
     }
 
     stages {
-        stage('Checkout') {
+
+        stage("Checkout") {
             steps {
                 checkout scm
+                echo "Branch Running → ${env.BRANCH_NAME}"
             }
         }
 
-        stage("Build & Push") {
+        stage("Docker Login") {
+            steps {
+                sh """
+                echo $DOCKER_CREDS_PSW | docker login -u $DOCKER_CREDS_USR --password-stdin
+                """
+            }
+        }
+
+        stage("Build & Push Docker Image") {
             steps {
                 sh """
                 docker build -t $REGISTRY/$IMAGE_NAME:${env.BRANCH_NAME} .
@@ -26,12 +37,14 @@ pipeline {
         stage("Deploy to Kubernetes") {
             steps {
                 script {
-                    if (env.BRANCH_NAME == "prod") {
-                        input message: "Approve Production Deployment?"
-                    }
+                    sh "mkdir -p ~/.kube"
+                    writeFile file: "~/.kube/config", text: KUBE_CONFIG
+
                     sh """
-                    export KUBECONFIG=${KUBE_CONFIG}
-                    kubectl apply -f k8s/deployment.yaml
+                    sed -i 's|IMAGE|$REGISTRY/$IMAGE_NAME:${env.BRANCH_NAME}|g' k8s/deployment.yaml
+                    kubectl apply -f k8s/deployment.yaml -n dev
+                    kubectl apply -f k8s/service.yaml -n dev
+                    kubectl rollout status deployment/k8s-app -n dev
                     """
                 }
             }
