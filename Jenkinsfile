@@ -2,10 +2,10 @@ pipeline {
     agent any
 
     environment {
-        REGISTRY = "docker.io/YOUR_DOCKERHUB_USERNAME"
+        REGISTRY = "docker.io/tusharrahangdale"          // Your DockerHub Username
         IMAGE_NAME = "k8s-demo-app"
-        KUBE_CONFIG = credentials('kubeconfig-creds')   // upload kubeconfig in Jenkins
-        DOCKER_CREDS = credentials('dockerhub-creds')   // add docker creds in Jenkins
+        DOCKER_CREDS = credentials('dockerhub-creds')    // Add in Jenkins Credentials
+        KUBE_CONFIG = credentials('kubeconfig-creds')    // Upload kubeconfig in Jenkins
     }
 
     stages {
@@ -13,7 +13,7 @@ pipeline {
         stage("Git Clone") {
             steps {
                 checkout scm
-                echo "Branch -> ${env.BRANCH_NAME}"
+                echo "Building from branch → ${env.BRANCH_NAME}"
             }
         }
 
@@ -34,18 +34,20 @@ pipeline {
             }
         }
 
-        stage("Apply K8s Manifests") {
+        stage("Deploy to Kubernetes") {
             steps {
                 script {
-                    // store kubeconfig to Jenkins agent
+                    // Store kubeconfig for kubectl access
                     sh """
                     mkdir -p ~/.kube
                     echo '${KUBE_CONFIG}' > ~/.kube/config
                     """
 
+                    // Deploy with new image per branch
                     sh """
-                    kubectl set image deployment/k8s-app k8s-container=$REGISTRY/$IMAGE_NAME:${env.BRANCH_NAME} -n default || \
-                    kubectl apply -f k8s/
+                    sed -i 's|IMAGE|$REGISTRY/$IMAGE_NAME:${env.BRANCH_NAME}|g' k8s/deployment.yaml
+                    kubectl apply -f k8s/deployment.yaml
+                    kubectl apply -f k8s/service.yaml
                     """
                 }
             }
@@ -54,10 +56,9 @@ pipeline {
         stage("Rollout Status Check") {
             steps {
                 sh """
-                kubectl rollout status deployment/k8s-app -n default --timeout=60s
+                kubectl rollout status deployment/k8s-app --timeout=60s
                 """
             }
         }
     }
 }
-
