@@ -27,8 +27,8 @@ pipeline {
         stage("Build & Push Docker Image") {
             steps {
                 sh '''
-                    docker build -t docker.io/'"$DOCKER_USER"'/demo-app:$BRANCH_NAME .
-                    docker push docker.io/'"$DOCKER_USER"'/demo-app:$BRANCH_NAME
+                    docker build -t docker.io/$DOCKER_USER/demo-app:$BRANCH_NAME .
+                    docker push docker.io/$DOCKER_USER/demo-app:$BRANCH_NAME
                 '''
             }
         }
@@ -36,12 +36,14 @@ pipeline {
         stage("Deploy To Kubernetes") {
             steps {
                 withCredentials([file(credentialsId: 'k8s-config', variable: 'KCFG')]) {
+
                     sh '''
+                        # Create kube folder where Jenkins has permission
                         mkdir -p ./kube
                         cp $KCFG ./kube/config
                         chmod 600 ./kube/config
 
-                        sed -i "s|IMAGE|docker.io/'"$DOCKER_USER"'/demo-app:$BRANCH_NAME|g" k8s/deployment.yaml
+                        sed -i "s|IMAGE|docker.io/$DOCKER_USER/demo-app:$BRANCH_NAME|g" k8s/deployment.yaml
 
                         kubectl --kubeconfig=./kube/config apply -f k8s/deployment.yaml -n $BRANCH_NAME
                         kubectl --kubeconfig=./kube/config get pods -n $BRANCH_NAME
