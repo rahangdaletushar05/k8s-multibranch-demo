@@ -3,7 +3,6 @@ pipeline {
 
     environment {
         DOCKER_USER = "tusharrahangdale"
-        KUBE_NAMESPACE = "${env.BRANCH_NAME}"   // Namespace = branch name
     }
 
     stages {
@@ -18,9 +17,7 @@ pipeline {
         stage("Docker Login") {
             steps {
                 withCredentials([string(credentialsId: 'docker-pass', variable: 'DOCKER_PASS')]) {
-                    sh """
-                        echo "$DOCKER_PASS" | docker login -u ${DOCKER_USER} --password-stdin
-                    """
+                    sh 'echo "$DOCKER_PASS" | docker login -u $DOCKER_USER --password-stdin'
                 }
             }
         }
@@ -36,15 +33,15 @@ pipeline {
 
         stage("Deploy To Kubernetes") {
             steps {
-                withCredentials([file(credentialsId: 'kube-config', variable: 'KCFG')]) {
+                withCredentials([file(credentialsId: 'k8s-config', variable: 'KCFG')]) {
                     sh """
-                        mkdir -p \$WORKSPACE/kube
-                        cp \$KCFG \$WORKSPACE/kube/config
+                        mkdir -p /tmp/kube
+                        cp \$KCFG /tmp/kube/config
 
-                        sed -i "s|IMAGE|docker.io/${DOCKER_USER}/demo-app:${env.BRANCH_NAME}|g" k8s/deployment.yaml
+                        kubectl --kubeconfig=/tmp/kube/config set image deployment/k8s-app \
+                        k8s-container=docker.io/${DOCKER_USER}/demo-app:${env.BRANCH_NAME} -n ${env.BRANCH_NAME}
 
-                        kubectl --kubeconfig=\$WORKSPACE/kube/config apply -f k8s/deployment.yaml -n ${KUBE_NAMESPACE}
-                        kubectl --kubeconfig=\$WORKSPACE/kube/config get pods -n ${KUBE_NAMESPACE}
+                        kubectl --kubeconfig=/tmp/kube/config get pods -n ${env.BRANCH_NAME}
                     """
                 }
             }
