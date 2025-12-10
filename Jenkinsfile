@@ -2,36 +2,48 @@ pipeline {
     agent any
 
     environment {
-        REGISTRY = "docker.io/YOUR_DOCKERHUB_USER"    // change this
-        IMAGE_NAME = "demo-app"
-        KUBE_CONFIG = credentials('kubeconfig-creds')
+        DOCKER_USER = "tusharrahangdale"
     }
 
     stages {
-        stage('Checkout') {
+
+        stage("Checkout") {
             steps {
+                echo "Branch Running → ${env.BRANCH_NAME}"
                 checkout scm
             }
         }
 
-        stage("Build & Push") {
+        stage("Docker Login") {
+            steps {
+                withCredentials([string(credentialsId: 'docker-pass', variable: 'DOCKER_PASS')]) {
+                    sh """
+                        echo "$DOCKER_PASS" | docker login -u ${DOCKER_USER} --password-stdin
+                    """
+                }
+            }
+        }
+
+        stage("Build & Push Docker Image") {
             steps {
                 sh """
-                docker build -t $REGISTRY/$IMAGE_NAME:${env.BRANCH_NAME} .
-                docker push $REGISTRY/$IMAGE_NAME:${env.BRANCH_NAME}
+                    docker build -t docker.io/${DOCKER_USER}/demo-app:${env.BRANCH_NAME} .
+                    docker push docker.io/${DOCKER_USER}/demo-app:${env.BRANCH_NAME}
                 """
             }
         }
 
         stage("Deploy to Kubernetes") {
             steps {
-                script {
-                    if (env.BRANCH_NAME == "prod") {
-                        input message: "Approve Production Deployment?"
-                    }
+                withCredentials([file(credentialsId: 'kube-config', variable: 'KUBE_CONFIG')]) {
                     sh """
-                    export KUBECONFIG=${KUBE_CONFIG}
-                    kubectl apply -f k8s/deployment.yaml
+                        mkdir -p /tmp/kube
+                        cp \$KUBE_CONFIG /tmp/kube/config
+
+                        sed -i "s|IMAGE|docker.io/${DOCKER_USER}/demo-app:${env.BRANCH_NAME}|g" k8s/deployment.yaml
+
+                        kubectl --kubeconfig=/tmp/kube/config apply -f k8s/deployment.yaml -n dev
+                        kubectl --kubeconfig=/tmp/kube/config get pods -n dev
                     """
                 }
             }
