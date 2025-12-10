@@ -3,6 +3,7 @@ pipeline {
 
     environment {
         DOCKER_USER = "tusharrahangdale"
+        KUBE_PATH = "/var/lib/jenkins/kube"   // Writable location
     }
 
     stages {
@@ -36,17 +37,15 @@ pipeline {
         stage("Deploy To Kubernetes") {
             steps {
                 withCredentials([file(credentialsId: 'k8s-config', variable: 'KCFG')]) {
-
                     sh '''
-                        # Create kube folder where Jenkins has permission
-                        mkdir -p ./kube
-                        cp $KCFG ./kube/config
-                        chmod 600 ./kube/config
+                        mkdir -p $KUBE_PATH
+                        cp $KCFG $KUBE_PATH/config
+                        chmod 600 $KUBE_PATH/config
 
                         sed -i "s|IMAGE|docker.io/$DOCKER_USER/demo-app:$BRANCH_NAME|g" k8s/deployment.yaml
 
-                        kubectl --kubeconfig=./kube/config apply -f k8s/deployment.yaml -n $BRANCH_NAME
-                        kubectl --kubeconfig=./kube/config get pods -n $BRANCH_NAME
+                        kubectl --kubeconfig=$KUBE_PATH/config apply -f k8s/deployment.yaml -n $BRANCH_NAME
+                        kubectl --kubeconfig=$KUBE_PATH/config get pods -n $BRANCH_NAME
                     '''
                 }
             }
