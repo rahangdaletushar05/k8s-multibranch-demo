@@ -1,11 +1,13 @@
-@Library('my-shared-lib') _   // MUST match Jenkins → Global Library name
+@Library('my-shared-lib') _
 
 pipeline {
     agent any
 
     environment {
         DOCKER_USER = "tusharrahangdale"
-        DEPLOY_NAME = "demo-deploy"   // Kubernetes deployment name
+
+        // Deployment name based on branch
+        DEPLOY_NAME = (env.BRANCH_NAME == "main") ? "k8s-app" : "demo-deploy"
     }
 
     stages {
@@ -41,7 +43,7 @@ pipeline {
             steps {
                 script {
                     try {
-                        echo "⏳ Checking deployment rollout..."
+                        echo "⏳ Checking rollout for $DEPLOY_NAME in namespace ${env.BRANCH_NAME}"
                         sh """
                         kubectl rollout status deployment/${DEPLOY_NAME} \
                         -n ${env.BRANCH_NAME} --timeout=60s
@@ -49,11 +51,8 @@ pipeline {
                         echo "🎉 Deployment Successful!"
                     } catch (err) {
                         echo "❌ Deployment Failed — Rolling Back!"
-                        sh """
-                        kubectl rollout undo deployment/${DEPLOY_NAME} \
-                        -n ${env.BRANCH_NAME}
-                        """
-                        error("Pipeline Failed — Rollback Triggered")
+                        sh "kubectl rollout undo deployment/${DEPLOY_NAME} -n ${env.BRANCH_NAME}"
+                        error("Rollback Triggered — Deployment Failed")
                     }
                 }
             }
