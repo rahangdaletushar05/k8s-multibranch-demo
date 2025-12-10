@@ -17,35 +17,35 @@ pipeline {
         stage("Docker Login") {
             steps {
                 withCredentials([string(credentialsId: 'docker-pass', variable: 'DOCKER_PASS')]) {
-                    sh """
-                        echo "$DOCKER_PASS" | docker login -u ${DOCKER_USER} --password-stdin
-                    """
+                    sh '''
+                        echo "$DOCKER_PASS" | docker login -u $DOCKER_USER --password-stdin
+                    '''
                 }
             }
         }
 
         stage("Build & Push Docker Image") {
             steps {
-                sh """
-                    docker build -t docker.io/${DOCKER_USER}/demo-app:${env.BRANCH_NAME} .
-                    docker push docker.io/${DOCKER_USER}/demo-app:${env.BRANCH_NAME}
-                """
+                sh '''
+                    docker build -t docker.io/'"$DOCKER_USER"'/demo-app:$BRANCH_NAME .
+                    docker push docker.io/'"$DOCKER_USER"'/demo-app:$BRANCH_NAME
+                '''
             }
         }
 
         stage("Deploy To Kubernetes") {
             steps {
                 withCredentials([file(credentialsId: 'k8s-config', variable: 'KCFG')]) {
-                    sh """
-                        mkdir -p /home/ubuntu/.kube
-                        cp \$KCFG /home/ubuntu/.kube/config
-                        chmod 600 /home/ubuntu/.kube/config
+                    sh '''
+                        mkdir -p ./kube
+                        cp $KCFG ./kube/config
+                        chmod 600 ./kube/config
 
-                        sed -i "s|IMAGE|docker.io/${DOCKER_USER}/demo-app:${env.BRANCH_NAME}|g" k8s/deployment.yaml
+                        sed -i "s|IMAGE|docker.io/'"$DOCKER_USER"'/demo-app:$BRANCH_NAME|g" k8s/deployment.yaml
 
-                        kubectl apply -f k8s/deployment.yaml -n ${env.BRANCH_NAME}
-                        kubectl get pods -n ${env.BRANCH_NAME}
-                    """
+                        kubectl --kubeconfig=./kube/config apply -f k8s/deployment.yaml -n $BRANCH_NAME
+                        kubectl --kubeconfig=./kube/config get pods -n $BRANCH_NAME
+                    '''
                 }
             }
         }
