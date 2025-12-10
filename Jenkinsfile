@@ -35,19 +35,16 @@ pipeline {
         }
 
         stage("Deploy To Kubernetes") {
-            when {
-                expression { return env.BRANCH_NAME in ["dev","main","stage","prod"] }
-            }
             steps {
                 withCredentials([file(credentialsId: 'kube-config', variable: 'KCFG')]) {
                     sh """
-                        mkdir -p /tmp/kube
-                        cp \$KCFG /tmp/kube/config
+                        mkdir -p \$WORKSPACE/kube
+                        cp \$KCFG \$WORKSPACE/kube/config
 
                         sed -i "s|IMAGE|docker.io/${DOCKER_USER}/demo-app:${env.BRANCH_NAME}|g" k8s/deployment.yaml
 
-                        kubectl --kubeconfig=/tmp/kube/config apply -f k8s/deployment.yaml -n ${KUBE_NAMESPACE}
-                        kubectl --kubeconfig=/tmp/kube/config get pods -n ${KUBE_NAMESPACE}
+                        kubectl --kubeconfig=\$WORKSPACE/kube/config apply -f k8s/deployment.yaml -n ${KUBE_NAMESPACE}
+                        kubectl --kubeconfig=\$WORKSPACE/kube/config get pods -n ${KUBE_NAMESPACE}
                     """
                 }
             }
