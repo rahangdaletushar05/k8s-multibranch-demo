@@ -1,11 +1,11 @@
-@Library('my-shared-lib') _   // Shared Library
+@Library('my-shared-lib') _   // MUST match Jenkins → Global Library name
 
 pipeline {
     agent any
 
     environment {
         DOCKER_USER = "tusharrahangdale"
-        DEPLOY_NAME = "demo-deploy"   // your deployment name in cluster
+        DEPLOY_NAME = "demo-deploy"   // Kubernetes deployment name
     }
 
     stages {
@@ -37,7 +37,6 @@ pipeline {
             }
         }
 
-        /* 🔥 Final Stage — Rollout Verification + Auto Rollback */
         stage("Verify Rollout Status") {
             steps {
                 script {
