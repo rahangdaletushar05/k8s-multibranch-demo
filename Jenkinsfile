@@ -5,9 +5,6 @@ pipeline {
 
     environment {
         DOCKER_USER = "tusharrahangdale"
-
-        // Deployment name based on branch
-        DEPLOY_NAME = (env.BRANCH_NAME == "main") ? "k8s-app" : "demo-deploy"
     }
 
     stages {
@@ -42,8 +39,13 @@ pipeline {
         stage("Verify Rollout Status") {
             steps {
                 script {
+
+                    // 🔥 Dynamic deployment name:
+                    def DEPLOY_NAME = (env.BRANCH_NAME == "main") ? "k8s-app" : "demo-deploy"
+
+                    echo "⏳ Checking rollout for deployment: ${DEPLOY_NAME} in namespace: ${env.BRANCH_NAME}"
+
                     try {
-                        echo "⏳ Checking rollout for $DEPLOY_NAME in namespace ${env.BRANCH_NAME}"
                         sh """
                         kubectl rollout status deployment/${DEPLOY_NAME} \
                         -n ${env.BRANCH_NAME} --timeout=60s
