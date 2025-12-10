@@ -1,19 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: k8s-app
+  name: demo-deploy
+  labels:
+    app: demo-app
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: k8s-app
+      app: demo-app
   template:
     metadata:
       labels:
-        app: k8s-app
+        app: demo-app
     spec:
       containers:
-      - name: k8s-container
-        image: IMAGE
-        ports:
-        - containerPort: 80
+        - name: demo-app
+          image: IMAGE
+          ports:
+            - containerPort: 80
