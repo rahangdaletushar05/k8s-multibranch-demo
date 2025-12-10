@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: demo-deploy
+  name: prod-app
   labels:
-    app: demo-app
+    app: prod-app
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: demo-app
+      app: prod-app
   template:
     metadata:
       labels:
-        app: demo-app
+        app: prod-app
     spec:
       containers:
-        - name: demo-app
+        - name: prod-app
           image: IMAGE
           ports:
             - containerPort: 80
