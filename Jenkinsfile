@@ -3,13 +3,14 @@ pipeline {
 
     environment {
         DOCKER_USER = "tusharrahangdale"
+        KUBE_NAMESPACE = "${env.BRANCH_NAME}"   // Namespace = branch name
     }
 
     stages {
 
         stage("Checkout") {
             steps {
-                echo "Branch Running → ${env.BRANCH_NAME}"
+                echo "🔹 Branch Running → ${env.BRANCH_NAME}"
                 checkout scm
             }
         }
@@ -33,17 +34,20 @@ pipeline {
             }
         }
 
-        stage("Deploy to Kubernetes") {
+        stage("Deploy To Kubernetes") {
+            when {
+                expression { return env.BRANCH_NAME in ["dev","main","stage","prod"] }
+            }
             steps {
                 withCredentials([file(credentialsId: 'kube-config', variable: 'KCFG')]) {
                     sh """
-                        mkdir -p ./kube
-                        cp \$KCFG ./kube/config
+                        mkdir -p /tmp/kube
+                        cp \$KCFG /tmp/kube/config
 
-                        sed -i "s|IMAGE_TO_BE_REPLACED|docker.io/${DOCKER_USER}/demo-app:${env.BRANCH_NAME}|g" k8s/deployment.yaml
+                        sed -i "s|IMAGE|docker.io/${DOCKER_USER}/demo-app:${env.BRANCH_NAME}|g" k8s/deployment.yaml
 
-                        kubectl --kubeconfig=./kube/config apply -f k8s/deployment.yaml -n ${env.BRANCH_NAME}
-                        kubectl --kubeconfig=./kube/config get pods -n ${env.BRANCH_NAME}
+                        kubectl --kubeconfig=/tmp/kube/config apply -f k8s/deployment.yaml -n ${KUBE_NAMESPACE}
+                        kubectl --kubeconfig=/tmp/kube/config get pods -n ${KUBE_NAMESPACE}
                     """
                 }
             }
