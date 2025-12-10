@@ -35,5 +35,15 @@ pipeline {
                 )
             }
         }
+
+        /* 🔥 NEW STAGE → Wait for Deployment to Get Ready  */
+        stage("Verify Rollout Status") {
+            steps {
+                sh """
+                kubectl rollout status deployment/demo-app \
+                -n ${env.BRANCH_NAME} --timeout=60s
+                """
+            }
+        }
     }
 }
