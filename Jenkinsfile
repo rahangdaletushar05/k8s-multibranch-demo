@@ -17,7 +17,9 @@ pipeline {
         stage("Docker Login") {
             steps {
                 withCredentials([string(credentialsId: 'docker-pass', variable: 'DOCKER_PASS')]) {
-                    sh 'echo "$DOCKER_PASS" | docker login -u $DOCKER_USER --password-stdin'
+                    sh """
+                        echo "$DOCKER_PASS" | docker login -u ${DOCKER_USER} --password-stdin
+                    """
                 }
             }
         }
@@ -35,13 +37,14 @@ pipeline {
             steps {
                 withCredentials([file(credentialsId: 'k8s-config', variable: 'KCFG')]) {
                     sh """
-                        mkdir -p /tmp/kube
-                        cp \$KCFG /tmp/kube/config
+                        mkdir -p /home/ubuntu/.kube
+                        cp \$KCFG /home/ubuntu/.kube/config
+                        chmod 600 /home/ubuntu/.kube/config
 
-                        kubectl --kubeconfig=/tmp/kube/config set image deployment/k8s-app \
-                        k8s-container=docker.io/${DOCKER_USER}/demo-app:${env.BRANCH_NAME} -n ${env.BRANCH_NAME}
+                        sed -i "s|IMAGE|docker.io/${DOCKER_USER}/demo-app:${env.BRANCH_NAME}|g" k8s/deployment.yaml
 
-                        kubectl --kubeconfig=/tmp/kube/config get pods -n ${env.BRANCH_NAME}
+                        kubectl apply -f k8s/deployment.yaml -n ${env.BRANCH_NAME}
+                        kubectl get pods -n ${env.BRANCH_NAME}
                     """
                 }
             }
