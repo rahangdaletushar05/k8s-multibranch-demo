@@ -1,79 +1,29 @@
-@Library('my-shared-lib') _
+stage("Verify Rollout Status") {
+    steps {
+        script {
 
-pipeline {
-    agent any
+            def DEPLOY_NAME = ""
 
-    environment {
-        DOCKER_USER = "tusharrahangdale"
-    }
-
-    stages {
-
-        stage("Checkout") {
-            steps {
-                echo "🔹 Running Branch → ${env.BRANCH_NAME}"
-                checkout scm
+            if (env.BRANCH_NAME == "main") {
+                DEPLOY_NAME = "k8s-app"
+            } else if (env.BRANCH_NAME == "prod") {
+                DEPLOY_NAME = "prod-app"
+            } else {
+                DEPLOY_NAME = "demo-deploy"
             }
-        }
 
-        /* 🔐 Docker Login (Updated with dockerhub-creds-2) */
-        stage("Docker Login") {
-            steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub-creds-2',
-                    usernameVariable: 'USER',
-                    passwordVariable: 'PASS'
-                )]) {
-                    sh """
-                    echo $PASS | docker login -u $USER --password-stdin
-                    """
-                }
-            }
-        }
+            echo "⏳ Checking rollout for deployment: ${DEPLOY_NAME} in namespace: ${env.BRANCH_NAME}"
 
-        /* 🛠 Build + Push */
-        stage("Docker Build & Push") {
-            steps {
+            try {
                 sh """
-                docker build -t docker.io/${DOCKER_USER}/demo-app:${env.BRANCH_NAME} .
-                docker push docker.io/${DOCKER_USER}/demo-app:${env.BRANCH_NAME}
+                kubectl rollout status deployment/${DEPLOY_NAME} \
+                -n ${env.BRANCH_NAME} --timeout=60s
                 """
-            }
-        }
-
-        /* 🚀 Deploy To Kubernetes */
-        stage("Deploy To Kubernetes") {
-            steps {
-                k8sDeploy(
-                    image: "docker.io/${DOCKER_USER}/demo-app:${env.BRANCH_NAME}",
-                    namespace: env.BRANCH_NAME,
-                    deployFile: "k8s/deployment.yaml",
-                    credential: "k8s-config"
-                )
-            }
-        }
-
-        /* 🔎 Verify Rollout */
-        stage("Verify Rollout Status") {
-            steps {
-                script {
-
-                    def DEPLOY_NAME = (env.BRANCH_NAME == "main") ? "k8s-app" : "demo-deploy"
-
-                    echo "⏳ Checking rollout for deployment: ${DEPLOY_NAME} in namespace: ${env.BRANCH_NAME}"
-
-                    try {
-                        sh """
-                        kubectl rollout status deployment/${DEPLOY_NAME} \
-                        -n ${env.BRANCH_NAME} --timeout=60s
-                        """
-                        echo "🎉 Deployment Successful!"
-                    } catch (err) {
-                        echo "❌ Deployment Failed — Rolling Back!"
-                        sh "kubectl rollout undo deployment/${DEPLOY_NAME} -n ${env.BRANCH_NAME}"
-                        error("Rollback Triggered — Deployment Failed")
-                    }
-                }
+                echo "🎉 Deployment Successful!"
+            } catch (err) {
+                echo "❌ Deployment Failed — Rolling Back!"
+                sh "kubectl rollout undo deployment/${DEPLOY_NAME} -n ${env.BRANCH_NAME}"
+                error("Rollback Triggered — Deployment Failed")
             }
         }
     }
