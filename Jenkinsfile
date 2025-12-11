@@ -1,11 +1,10 @@
-@Library('my-shared-lib') _   // MUST match Jenkins → Global Library name
+@Library('my-shared-lib') _
 
 pipeline {
     agent any
 
     environment {
         DOCKER_USER = "tusharrahangdale"
-        DEPLOY_NAME = "demo-deploy"   // Kubernetes deployment name
     }
 
     stages {
@@ -17,6 +16,22 @@ pipeline {
             }
         }
 
+        /* 🔐 Docker Login (Updated with dockerhub-creds-2) */
+        stage("Docker Login") {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds-2',
+                    usernameVariable: 'USER',
+                    passwordVariable: 'PASS'
+                )]) {
+                    sh """
+                    echo $PASS | docker login -u $USER --password-stdin
+                    """
+                }
+            }
+        }
+
+        /* 🛠 Build + Push */
         stage("Docker Build & Push") {
             steps {
                 sh """
@@ -26,6 +41,7 @@ pipeline {
             }
         }
 
+        /* 🚀 Deploy To Kubernetes */
         stage("Deploy To Kubernetes") {
             steps {
                 k8sDeploy(
@@ -37,11 +53,16 @@ pipeline {
             }
         }
 
+        /* 🔎 Verify Rollout */
         stage("Verify Rollout Status") {
             steps {
                 script {
+
+                    def DEPLOY_NAME = (env.BRANCH_NAME == "main") ? "k8s-app" : "demo-deploy"
+
+                    echo "⏳ Checking rollout for deployment: ${DEPLOY_NAME} in namespace: ${env.BRANCH_NAME}"
+
                     try {
-                        echo "⏳ Checking deployment rollout..."
                         sh """
                         kubectl rollout status deployment/${DEPLOY_NAME} \
                         -n ${env.BRANCH_NAME} --timeout=60s
@@ -49,11 +70,8 @@ pipeline {
                         echo "🎉 Deployment Successful!"
                     } catch (err) {
                         echo "❌ Deployment Failed — Rolling Back!"
-                        sh """
-                        kubectl rollout undo deployment/${DEPLOY_NAME} \
-                        -n ${env.BRANCH_NAME}
-                        """
-                        error("Pipeline Failed — Rollback Triggered")
+                        sh "kubectl rollout undo deployment/${DEPLOY_NAME} -n ${env.BRANCH_NAME}"
+                        error("Rollback Triggered — Deployment Failed")
                     }
                 }
             }
